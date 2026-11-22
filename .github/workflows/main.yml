@@ -44,4 +44,3 @@ jobs:
         with:
           name: whatsapp-chat-viewer-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-
