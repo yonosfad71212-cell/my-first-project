@@ -1,8 +1,15 @@
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// أرقام عربية (٠-٩) وعلامات اتجاه خفية يضيفها واتساب في ملفات التصدير
+const String _digit = r'[\d\u0660-\u0669\u06F0-\u06F9]';
+const String _mark = r'[\u200E\u200F\u061C\u202A-\u202E\uFEFF]';
+
+String _cleanMarks(String text) {
+  return text.replaceAll(RegExp(_mark), '');
+}
 
 void main() {
   runApp(const WhatsAppViewerApp());
@@ -158,29 +165,47 @@ class _HomePageState extends State<HomePage> {
     final lines = content.replaceAll('\r\n', '\n').split('\n');
     final messages = <ChatMessage>[];
 
+    // يدعم الأرقام العربية والإنجليزية، والفاصلة العربية،
+    // والعلامات الخفية التي يضيفها واتساب
     final pattern = RegExp(
-      r'^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}),?\s*(.+?)\s+-\s+(.*)$',
+      '^$_mark*'
+      '($_digit{1,2}$_mark*[/.-]$_mark*$_digit{1,2}$_mark*[/.-]$_mark*$_digit{2,4})'
+      '$_mark*[,،]?\\s*'
+      '(.+?)\\s+$_mark*-\\s+'
+      '(.*)\$',
     );
 
     for (final line in lines) {
       final match = pattern.firstMatch(line);
 
       if (match != null) {
-        final date = '${match.group(1)} ${match.group(2)}';
+        final day = _cleanMarks(match.group(1) ?? '');
+        final time = _cleanMarks(match.group(2) ?? '')
+            .replaceAll('\u202F', ' ')
+            .replaceAll('\u00A0', ' ')
+            .trim();
+        final date = '$day $time';
         final rest = match.group(3) ?? '';
 
         final separator = rest.indexOf(': ');
 
         if (separator > 0) {
           messages.add(ChatMessage(
-            sender: rest.substring(0, separator),
+            sender: _cleanMarks(rest.substring(0, separator)).trim(),
             message: rest.substring(separator + 2),
+            date: date,
+          ));
+        } else if (rest.length > 1 && rest.endsWith(':')) {
+          // سطر فيه اسم المرسل فقط ونقطتان بلا نص
+          messages.add(ChatMessage(
+            sender: _cleanMarks(rest.substring(0, rest.length - 1)).trim(),
+            message: '',
             date: date,
           ));
         } else {
           messages.add(ChatMessage(
             sender: '',
-            message: rest,
+            message: _cleanMarks(rest),
             date: date,
             system: true,
           ));
